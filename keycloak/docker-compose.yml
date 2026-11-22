@@ -1,0 +1,39 @@
+# Local Keycloak for the identity-broker lab.
+#
+# This single container runs TWO realms:
+#   * `demo`   -- the broker realm. The LeetCode-style app trusts this realm.
+#   * `google` -- a second realm used as the SIMULATED upstream Google IdP.
+# Keycloak (demo) performs identity brokering to Keycloak (google), so the whole
+# "Sign in with Google" flow runs locally without external accounts.
+#
+# Why Keycloak in Docker?  The lab is about our Python code, not about operating
+# an identity provider.  This container is disposable: `docker compose down`
+# removes it (and its in-memory H2 database) so the next `up` re-imports both
+# realms from JSON.
+#
+# `start-dev` is Keycloak's development mode.  It enables plain HTTP (needed for
+# http://localhost redirect URIs), disables some production hardening, and makes
+# the server listen on port 8080 without any TLS certificates.
+#
+# `--import-realm` tells Keycloak to scan /opt/keycloak/data/import at startup and
+# import every *.json realm file it finds there.  We mount ./realms at that path.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: sso-lab-keycloak
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+    environment:
+      # Keycloak 26 renamed the old KEYCLOAK_ADMIN* variables.  These bootstrap a
+      # temporary master-realm admin the first time the container starts.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      # host:container -- our apps and browser both talk to http://localhost:8080
+      - "8080:8080"
+    volumes:
+      # Keycloak reads realm exports/imports from this directory on boot.
+      - ./realms:/opt/keycloak/data/import
+    restart: unless-stopped
